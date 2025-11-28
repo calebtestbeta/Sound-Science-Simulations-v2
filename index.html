@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聲學與音響科學模擬工作站 (SPA v2.0)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- 設定 Tailwind 主題與字體 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2c3e50',
+                        accent: '#3498db',
+                        warm: '#fdfbf7', // 暖色調背景
+                    },
+                    fontFamily: {
+                        sans: ['"Microsoft JhengHei"', '"Heiti TC"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 嵌入式樣式：處理圖表容器 -->
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 400px; /* 預設高度 */
+            max-height: 500px;
+        }
+        canvas {
+            touch-action: none; /* 防止手機滑動頁面干擾畫布操作 */
+        }
+        /* 隱藏滾動條但保持功能 */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+    
+    <!-- Chosen Palette: Warm Neutrals + Professional Blue Accents -->
+    <!-- Application Structure Plan: 
+         - Dashboard View: Grid layout for module selection.
+         - Module Views: Full-screen functional areas with "Back" navigation.
+         - SPA Logic: Vanilla JS to toggle visibility of sections (no router).
+         - State Management: Global objects for each module to handle init/destroy loops.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. All visualziations are Canvas/Chart.js -->
+</head>
+<body class="bg-warm text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- 頁首 -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="cursor-pointer" onclick="app.showView('dashboard')">
+                <h1 class="text-xl md:text-2xl font-bold text-primary flex items-center gap-2">
+                    <span>🎛️</span> 聲學模擬工作站
+                </h1>
+                <p class="text-xs text-slate-500 hidden md:block">Acoustic & Audio Science Simulation Workstation</p>
+            </div>
+            <button id="back-btn" onclick="app.showView('dashboard')" class="hidden px-4 py-2 text-sm font-medium text-slate-600 hover:text-accent transition-colors flex items-center gap-1">
+                <span>←</span> 返回主選單
+            </button>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="flex-grow container max-w-6xl mx-auto px-4 py-6">
+        
+        <!-- VIEW: DASHBOARD -->
+        <div id="view-dashboard" class="animate-fade-in">
+            <div class="text-center mb-10 space-y-2">
+                <h2 class="text-3xl font-bold text-slate-800">探索聲音的物理特性</h2>
+                <p class="text-slate-600 max-w-2xl mx-auto">
+                    選擇下方模組，透過互動模擬深入了解音響工程、聽力學與建築聲學的核心原理。
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+                <!-- Card A: Delay -->
+                <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition-all cursor-pointer border border-slate-100 group" onclick="app.showView('delay')">
+                    <div class="flex items-start justify-between mb-4">
+                        <span class="text-4xl bg-blue-50 p-3 rounded-xl group-hover:scale-110 transition-transform">🎙️</span>
+                        <span class="px-3 py-1 bg-slate-100 text-slate-500 text-xs rounded-full">Live Sound</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-primary mb-2 group-hover:text-accent transition-colors">延遲補償模擬</h3>
+                    <p class="text-slate-500 text-sm leading-relaxed mb-4">
+                        模擬大型演唱會中主喇叭與延遲塔的時間差，視覺化距離與指向性造成的聲壓衰減與梳狀濾波效應。
+                    </p>
+                    <div class="text-accent font-semibold text-sm flex items-center gap-1">
+                        進入模擬 <span class="group-hover:translate-x-1 transition-transform">→</span>
+                    </div>
+                </div>
+
+                <!-- Card B: Mic -->
+                <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition-all cursor-pointer border border-slate-100 group" onclick="app.showView('mic')">
+                    <div class="flex items-start justify-between mb-4">
+                        <span class="text-4xl bg-purple-50 p-3 rounded-xl group-hover:scale-110 transition-transform">🎤</span>
+                        <span class="px-3 py-1 bg-slate-100 text-slate-500 text-xs rounded-full">Recording</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-primary mb-2 group-hover:text-accent transition-colors">麥克風指向性</h3>
+                    <p class="text-slate-500 text-sm leading-relaxed mb-4">
+                        互動式極座標圖。探索心型、超心型與槍型麥克風的收音範圍，以及高頻銳化 (Sharpening) 現象。
+                    </p>
+                    <div class="text-accent font-semibold text-sm flex items-center gap-1">
+                        進入模擬 <span class="group-hover:translate-x-1 transition-transform">→</span>
+                    </div>
+                </div>
+
+                <!-- Card C: Loudness -->
+                <div class="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition-all cursor-pointer border border-slate-100 group" onclick="app.showView('loudness')">
+                    <div class="flex items-start justify-between mb-4">
+                        <span class="text-4xl bg-green-50 p-3 rounded-xl group-hover:scale-110 transition-transform">👂</span>
+                        <span class="px-3 py-1 bg-slate-100 text-slate-500 text-xs rounded-full">Psychoacoustics</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-primary mb-2 group-hover:text-accent transition-colors">聽力學與等響度</h3>
+                    <p class="text-slate-500 text-sm leading-relaxed mb-4">
+                        Fletcher-Munson 曲線互動圖表。模擬正常聽力與聽力受損（老年性/噪音型）的閾值差異及助聽器補償。
+                    </p>
+                    <div class="text-accent font-semibold text-sm flex items-center gap-1">
+                        進入模擬 <span class="group-hover:translate-x-1 transition-transform">→</span>
+                    </div>
+                </div>
+
+                <!-- Card D: Reverb -->
+                <div class="bg-slate-900 p-6 rounded-2xl shadow-md hover:shadow-xl hover:shadow-slate-800/50 transition-all cursor-pointer border border-slate-800 group" onclick="app.showView('reverb')">
+                    <div class="flex items-start justify-between mb-4">
+                        <span class="text-4xl bg-slate-800 p-3 rounded-xl group-hover:scale-110 transition-transform">🏠</span>
+                        <span class="px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full">Acoustics</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2 group-hover:text-yellow-400 transition-colors">室內殘響 RT60</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-4">
+                        使用動態粒子系統進行光線追蹤 (Ray Tracing)，視覺化聲波在不同材質房間中的反射、擴散與能量衰減。
+                    </p>
+                    <div class="text-yellow-400 font-semibold text-sm flex items-center gap-1">
+                        進入暗房模擬 <span class="group-hover:translate-x-1 transition-transform">→</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: DELAY SIMULATION -->
+        <div id="view-delay" class="hidden animate-fade-in space-y-6">
+            <!-- 導讀 -->
+            <details class="bg-amber-50 border border-amber-200 rounded-xl p-4 cursor-pointer">
+                <summary class="font-bold text-amber-800 flex items-center gap-2">
+                    <span>💡</span> 1分鐘原理：為什麼演唱會需要「延遲塔」？
+                </summary>
+                <div class="mt-3 text-sm text-amber-900 leading-relaxed border-t border-amber-200 pt-3">
+                    <p class="mb-2"><strong>聲音速度很慢 (343 m/s)</strong>。在大型場地，聲音傳到後排可能延遲 0.5 秒以上。</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>無補償</strong>：後排觀眾會先聽到較近的延遲塔 (S2)，再聽到主舞台 (S1)，造成<strong>回音與模糊</strong>。</li>
+                        <li><strong>自動補償</strong>：讓 S2 <strong>「晚一點發聲」</strong> (電子延遲)，等待 S1 聲波到達。當兩者<strong>同時</strong>抵達觀眾耳朵，聲音才會清晰有力。</li>
+                    </ul>
+                </div>
+            </details>
+
+            <div class="grid lg:grid-cols-3 gap-6">
+                <!-- Canvas Area -->
+                <div class="lg:col-span-2 bg-slate-900 rounded-2xl p-1 overflow-hidden shadow-lg relative h-[400px] lg:h-[500px]">
+                    <canvas id="delayCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+                    <div class="absolute bottom-4 left-4 text-xs text-slate-400 bg-black/50 px-2 py-1 rounded pointer-events-none">
+                        點擊或拖曳黑色區域移動觀眾 (L)
+                    </div>
+                </div>
+
+                <!-- Controls & Stats -->
+                <div class="space-y-4">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                        <label class="block text-sm font-bold text-slate-700 mb-3">模式選擇</label>
+                        <div class="flex gap-2">
+                            <button id="btn-delay-raw" onclick="DelaySim.setMode(false)" class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">
+                                無補償 (Raw)
+                            </button>
+                            <button id="btn-delay-auto" onclick="DelaySim.setMode(true)" class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-colors bg-accent text-white shadow-lg shadow-blue-500/30">
+                                自動補償 (Aligned)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 space-y-3 text-sm">
+                        <h3 class="font-bold text-slate-700 border-b pb-2">⏱️ 時間與相位</h3>
+                        <div class="flex justify-between"><span class="text-slate-500">S1 到達時間</span><span id="d-t1" class="font-mono">-- ms</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">S2 到達時間</span><span id="d-t2" class="font-mono">-- ms</span></div>
+                        <div class="flex justify-between font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                            <span>時間差 (Δt)</span><span id="d-delta">-- ms</span>
+                        </div>
+                        <div class="flex justify-between text-accent"><span class="text-slate-500">系統補償</span><span id="d-comp">0.0 ms</span></div>
+                        <div id="d-warn" class="hidden text-xs text-red-500 font-bold bg-red-50 p-2 rounded mt-2">
+                            ⚠️ 警告：時間差 < 15ms，易產生梳狀濾波！
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 space-y-3 text-sm">
+                        <h3 class="font-bold text-slate-700 border-b pb-2">🔊 音量分析 (SPL)</h3>
+                        <div class="flex justify-between"><span class="text-slate-500">S1 音量</span><span id="d-spl1" class="font-mono">-- dB</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">S2 音量</span><span id="d-spl2" class="font-mono">-- dB</span></div>
+                        <div class="flex justify-between font-bold"><span class="text-slate-500">音量差</span><span id="d-diff">-- dB</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: MIC SIMULATION -->
+        <div id="view-mic" class="hidden animate-fade-in space-y-6">
+            <details class="bg-blue-50 border border-blue-200 rounded-xl p-4 cursor-pointer">
+                <summary class="font-bold text-blue-800 flex items-center gap-2">
+                    <span>💡</span> 1分鐘原理：極座標圖怎麼看？
+                </summary>
+                <div class="mt-3 text-sm text-blue-900 leading-relaxed border-t border-blue-200 pt-3">
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>圓半徑 = 收音靈敏度</strong>。離圓心越遠，麥克風聽得越清楚。</li>
+                        <li><strong>心型 (Cardioid)</strong>：專注前方，忽略後方。適合舞台。</li>
+                        <li><strong>頻率銳化</strong>：試著調高頻率 (Hz)，你會發現圖形變「尖」了。這是物理特性，高頻聲音像手電筒光束，低頻則像燈泡四散。</li>
+                    </ul>
+                </div>
+            </details>
+
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Controls -->
+                <div class="space-y-4">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-5">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-2">麥克風類型</label>
+                            <select id="m-type" onchange="MicSim.update()" class="w-full p-2 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-accent outline-none">
+                                <option value="cardioid">心型 (Cardioid)</option>
+                                <option value="supercardioid">超心型 (Supercardioid)</option>
+                                <option value="shotgun">槍型 (Shotgun)</option>
+                                <option value="omni">全指向 (Omni)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="text-sm font-bold text-slate-700">頻率 (Hz)</label>
+                                <span id="m-freq-val" class="text-sm font-mono text-accent">1000 Hz</span>
+                            </div>
+                            <input type="range" id="m-freq" min="100" max="10000" step="100" value="1000" oninput="MicSim.update()" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-accent">
+                            <p class="text-xs text-slate-500 mt-1">高頻會導致指向性變窄 (Sharpening)</p>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="text-sm font-bold text-slate-700">噪音源角度 (°)</label>
+                                <span id="m-angle-val" class="text-sm font-mono text-red-500">180°</span>
+                            </div>
+                            <input type="range" id="m-angle" min="0" max="359" value="180" oninput="MicSim.update()" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-500">
+                        </div>
+                    </div>
+
+                    <div class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                        <h3 class="text-sm font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2">數據分析</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between"><span class="text-blue-700">語音 Gain (0°)</span><span id="m-gain-voice" class="font-mono font-bold">0.0 dB</span></div>
+                            <div class="flex justify-between"><span class="text-blue-700">噪音 Gain</span><span id="m-gain-noise" class="font-mono font-bold text-red-600">-20.0 dB</span></div>
+                            <div class="mt-2 pt-2 border-t border-blue-200 flex justify-between items-center">
+                                <span class="text-blue-900 font-bold">訊噪比 (SNR) 改善</span>
+                                <span id="m-snr" class="text-xl font-bold text-accent">20.0 dB</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Canvas -->
+                <div class="flex justify-center items-center bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+                    <canvas id="polarCanvas" width="400" height="400" class="max-w-full h-auto"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: LOUDNESS SIMULATION -->
+        <div id="view-loudness" class="hidden animate-fade-in space-y-6">
+            <details class="bg-green-50 border border-green-200 rounded-xl p-4 cursor-pointer">
+                <summary class="font-bold text-green-800 flex items-center gap-2">
+                    <span>💡</span> 1分鐘原理：人耳不是完美的麥克風
+                </summary>
+                <div class="mt-3 text-sm text-green-900 leading-relaxed border-t border-green-200 pt-3">
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>中頻敏感</strong>：人說話的頻率 (1k-4k Hz) 我們聽得最清楚。</li>
+                        <li><strong>低頻遲鈍</strong>：請看圖表左側，20Hz 的聲音要開到 <strong>70dB</strong> 我們才勉強聽見。</li>
+                        <li><strong>聽力受損</strong>：通常從<strong>高頻</strong>開始流失。試著開啟「老年性聽損」模式，觀察右側曲線如何飆高（代表需要更大聲才聽得見）。</li>
+                    </ul>
+                </div>
+            </details>
+
+            <!-- Controls -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-wrap gap-4 items-center">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">🦻 聽力狀況</label>
+                    <select id="l-condition" onchange="LoudnessSim.update()" class="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-accent">
+                        <option value="normal">正常聽力 (Normal)</option>
+                        <option value="presbycusis">老年性聽損 (高頻流失)</option>
+                        <option value="noise">噪音型聽損 (4kHz 凹陷)</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                    <input type="checkbox" id="l-aid" onchange="LoudnessSim.update()" disabled class="w-4 h-4 accent-green-500">
+                    <label for="l-aid" class="text-sm font-medium text-slate-700 cursor-pointer select-none">啟用助聽器補償</label>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="chart-container bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
+                <canvas id="loudnessChart"></canvas>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-slate-50 p-3 rounded-lg text-center">
+                    <div class="text-xs text-slate-500">頻率 (Hz)</div>
+                    <div id="l-val-freq" class="text-lg font-bold text-slate-700">--</div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-lg text-center">
+                    <div class="text-xs text-slate-500">聲壓級 (dB)</div>
+                    <div id="l-val-spl" class="text-lg font-bold text-slate-700">--</div>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-lg text-center border-b-2 border-accent">
+                    <div class="text-xs text-slate-500">感知響度</div>
+                    <div id="l-val-phon" class="text-lg font-bold text-accent">-- Phon</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: REVERB SIMULATION -->
+        <div id="view-reverb" class="hidden animate-fade-in space-y-6">
+            <!-- 特殊暗色主題容器 -->
+            <div class="bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-700">
+                <div class="flex flex-col lg:flex-row gap-6">
+                    
+                    <!-- Controls (Dark Mode) -->
+                    <div class="lg:w-1/3 space-y-6">
+                        <div class="space-y-4">
+                            <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                                🏠 殘響實驗室
+                            </h2>
+                            <details class="bg-slate-800 rounded-lg p-3 text-sm text-slate-300">
+                                <summary class="cursor-pointer font-bold text-yellow-400">什麼是 RT60？</summary>
+                                <p class="mt-2 text-xs leading-relaxed">
+                                    聲音停止後，能量衰減 60dB 所需的時間。
+                                    <br>• 硬材質 (混凝土) = 反射多 = RT60 長
+                                    <br>• 軟材質 (吸音棉) = 吸收多 = RT60 短
+                                </p>
+                            </details>
+                        </div>
+
+                        <div class="space-y-4 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs text-slate-400">長度 (m)</label>
+                                    <input type="number" id="r-l" value="20" min="5" max="50" onchange="ReverbSim.updateCalc()" class="w-full bg-slate-700 text-white p-2 rounded border border-slate-600">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-400">寬度 (m)</label>
+                                    <input type="number" id="r-w" value="15" min="5" max="50" onchange="ReverbSim.updateCalc()" class="w-full bg-slate-700 text-white p-2 rounded border border-slate-600">
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="text-xs text-slate-400">高度 (m)</label>
+                                    <input type="number" id="r-h" value="5" min="2" max="20" onchange="ReverbSim.updateCalc()" class="w-full bg-slate-700 text-white p-2 rounded border border-slate-600">
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="text-xs text-slate-400">牆面材質</label>
+                                <select id="r-mat" onchange="ReverbSim.updateCalc()" class="w-full bg-slate-700 text-white p-2 rounded border border-slate-600 mt-1">
+                                    <option value="0.03">混凝土 (α=0.03) - 硬</option>
+                                    <option value="0.15">木板牆 (α=0.15) - 中</option>
+                                    <option value="0.60">窗簾/軟裝 (α=0.60) - 軟</option>
+                                    <option value="0.90">錄音室 (α=0.90) - 死寂</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-800 p-4 rounded-xl border-l-4 border-yellow-400">
+                            <div class="text-xs text-slate-400">Sabine RT60 估算</div>
+                            <div id="r-val-rt60" class="text-3xl font-mono font-bold text-yellow-400">-- s</div>
+                            <div class="flex gap-3 mt-2 text-xs text-slate-500">
+                                <span>V: <span id="r-val-v">0</span> m³</span>
+                                <span>S: <span id="r-val-s">0</span> m²</span>
+                            </div>
+                        </div>
+
+                        <button onclick="ReverbSim.fire()" class="w-full py-3 bg-gradient-to-r from-red-500 to-orange-600 text-white font-bold rounded-xl shadow-lg hover:from-red-600 hover:to-orange-700 active:scale-95 transition-all">
+                            🔊 發射聲波脈衝
+                        </button>
+                    </div>
+
+                    <!-- Canvas (Dark Mode) -->
+                    <div class="lg:w-2/3 bg-black rounded-xl overflow-hidden relative border border-slate-700 h-[500px]" id="reverb-container">
+                        <canvas id="reverbCanvas" class="w-full h-full block"></canvas>
+                        <div class="absolute top-4 left-4 text-xs text-slate-500">
+                            Visual: Energy Pulse & Ray Tracing
+                        </div>
+                        <div class="absolute bottom-4 left-4 flex gap-3 text-xs">
+                            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-white"></span>高能量</div>
+                            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-yellow-400"></span>反射</div>
+                            <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span>低能量</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t border-slate-100 py-6 mt-8">
+        <div class="text-center text-slate-400 text-sm">
+            <p>音響工程互動教學平台 v2.0 (SPA)</p>
+            <p class="mt-1 text-xs">Built with Tailwind CSS & Chart.js</p>
+        </div>
+    </footer>
+
+    <!-- LOGIC -->
+    <script>
+        // --- SPA NAVIGATION LOGIC ---
+        const app = {
+            views: ['dashboard', 'delay', 'mic', 'loudness', 'reverb'],
+            showView: (viewId) => {
+                // Toggle Views
+                app.views.forEach(id => {
+                    const el = document.getElementById(`view-${id}`);
+                    if (id === viewId) {
+                        el.classList.remove('hidden');
+                    } else {
+                        el.classList.add('hidden');
+                    }
+                });
+
+                // Toggle Header Button
+                const btn = document.getElementById('back-btn');
+                if (viewId === 'dashboard') {
+                    btn.classList.add('hidden');
+                    // Stop Reverb Loop to save battery
+                    ReverbSim.stopLoop();
+                } else {
+                    btn.classList.remove('hidden');
+                }
+
+                // Initialize specific modules
+                if (viewId === 'delay') DelaySim.init();
+                if (viewId === 'mic') MicSim.init();
+                if (viewId === 'reverb') ReverbSim.startLoop();
+            }
+        };
+
+        // --- MODULE A: DELAY SIMULATION ---
+        const DelaySim = {
+            ctx: null, canvas: null, width: 0, height: 0, scale: 1,
+            ROOM_W: 150, ROOM_D: 60,
+            S1: {x:10, y:30}, S2: {x:100, y:30}, L: {x:120, y:30},
+            autoComp: false,
+
+            init: function() {
+                this.canvas = document.getElementById('delayCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.resize();
+                window.addEventListener('resize', () => { if(!document.getElementById('view-delay').classList.contains('hidden')) this.resize(); });
+                
+                // Events
+                const updatePos = (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    const x = (clientX - rect.left) / this.scale;
+                    const y = (clientY - rect.top) / this.scale;
+                    this.L.x = Math.max(0, Math.min(this.ROOM_W, x));
+                    this.L.y = Math.max(0, Math.min(this.ROOM_D, y));
+                    this.draw();
+                    this.calc();
+                };
+                this.canvas.onmousedown = (e) => { updatePos(e); this.canvas.onmousemove = updatePos; };
+                this.canvas.onmouseup = () => { this.canvas.onmousemove = null; };
+                this.canvas.ontouchstart = (e) => { updatePos(e); e.preventDefault(); };
+                this.canvas.ontouchmove = (e) => { updatePos(e); e.preventDefault(); };
+
+                this.setMode(false); // Default
+            },
+
+            resize: function() {
+                const p = this.canvas.parentElement;
+                this.canvas.width = p.clientWidth;
+                this.canvas.height = p.clientHeight;
+                this.width = this.canvas.width;
+                this.height = this.canvas.height;
+                this.scale = this.width / this.ROOM_W;
+                this.draw();
+            },
+
+            setMode: function(isAuto) {
+                this.autoComp = isAuto;
+                document.getElementById('btn-delay-raw').className = isAuto ? 'flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200' : 'flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-colors bg-accent text-white shadow-lg shadow-blue-500/30';
+                document.getElementById('btn-delay-auto').className = !isAuto ? 'flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200' : 'flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-colors bg-accent text-white shadow-lg shadow-blue-500/30';
+                this.calc();
+            },
+
+            calc: function() {
+                const dist = (p1, p2) => Math.sqrt((p1.x-p2.x)**2 + (p1.y-p2.y)**2);
+                const d1 = dist(this.S1, this.L);
+                const d2 = dist(this.S2, this.L);
+                
+                const t1 = (d1/343)*1000;
+                const comp = this.autoComp ? ((this.S2.x - this.S1.x)/343)*1000 : 0;
+                const t2 = (d2/343)*1000 + comp;
+                
+                const delta = Math.abs(t1-t2);
+                
+                // SPL (Simple model)
+                const spl1 = 110 - 20*Math.log10(Math.max(1, d1));
+                const spl2 = 110 - 20*Math.log10(Math.max(1, d2));
+
+                document.getElementById('d-t1').innerText = t1.toFixed(1) + ' ms';
+                document.getElementById('d-t2').innerText = t2.toFixed(1) + ' ms';
+                document.getElementById('d-delta').innerText = delta.toFixed(1) + ' ms';
+                document.getElementById('d-comp').innerText = comp.toFixed(1) + ' ms';
+                document.getElementById('d-spl1').innerText = spl1.toFixed(1) + ' dB';
+                document.getElementById('d-spl2').innerText = spl2.toFixed(1) + ' dB';
+                document.getElementById('d-diff').innerText = Math.abs(spl1-spl2).toFixed(1) + ' dB';
+                
+                const warn = document.getElementById('d-warn');
+                if(delta > 0.1 && delta < 15 && Math.abs(spl1-spl2)<6) warn.classList.remove('hidden');
+                else warn.classList.add('hidden');
+            },
+
+            draw: function() {
+                const c = this.ctx;
+                c.fillStyle = '#0f172a'; // Slate 900
+                c.fillRect(0,0,this.width, this.height);
+                
+                // Grid
+                c.strokeStyle = '#1e293b';
+                c.beginPath();
+                for(let x=0; x<=this.ROOM_W; x+=10) {
+                    c.moveTo(x*this.scale, 0); c.lineTo(x*this.scale, this.height);
+                }
+                c.stroke();
+
+                const drawSpk = (p, color, label) => {
+                    const x = p.x*this.scale, y = p.y*this.scale;
+                    c.fillStyle = color;
+                    c.beginPath(); c.moveTo(x,y-10); c.lineTo(x+15,y-5); c.lineTo(x+15,y+5); c.lineTo(x,y+10); c.fill();
+                    c.fillStyle = '#fff'; c.font = '12px sans-serif'; c.fillText(label, x, y-15);
+                };
+
+                drawSpk(this.S1, '#3498db', 'S1');
+                drawSpk(this.S2, '#e67e22', 'S2');
+
+                // Listener
+                const lx = this.L.x*this.scale, ly = this.L.y*this.scale;
+                c.fillStyle = '#2ecc71'; c.beginPath(); c.arc(lx, ly, 8, 0, Math.PI*2); c.fill();
+                c.fillStyle='#fff'; c.fillText('L', lx+12, ly+4);
+                
+                // Lines
+                c.setLineDash([5,5]); c.strokeStyle='rgba(255,255,255,0.2)';
+                c.beginPath(); c.moveTo(this.S1.x*this.scale, this.S1.y*this.scale); c.lineTo(lx,ly); c.stroke();
+                c.beginPath(); c.moveTo(this.S2.x*this.scale, this.S2.y*this.scale); c.lineTo(lx,ly); c.stroke();
+                c.setLineDash([]);
+            }
+        };
+
+        // --- MODULE B: MIC SIMULATION ---
+        const MicSim = {
+            ctx: null, canvas: null, 
+            init: function() {
+                this.canvas = document.getElementById('polarCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.update();
+            },
+            update: function() {
+                const type = document.getElementById('m-type').value;
+                const freq = parseInt(document.getElementById('m-freq').value);
+                const angle = parseInt(document.getElementById('m-angle').value);
+
+                document.getElementById('m-freq-val').innerText = freq + ' Hz';
+                document.getElementById('m-angle-val').innerText = angle + '°';
+
+                const ctx = this.ctx;
+                const w = this.canvas.width, h = this.canvas.height;
+                const cx = w/2, cy = h/2, R = w*0.4;
+
+                ctx.clearRect(0,0,w,h);
+                
+                // Grid
+                ctx.strokeStyle = '#eee'; ctx.lineWidth=1;
+                for(let r=0.25; r<=1; r+=0.25) { ctx.beginPath(); ctx.arc(cx, cy, R*r, 0, Math.PI*2); ctx.stroke(); }
+                ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,h); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(w,cy); ctx.stroke();
+                
+                // Pattern
+                ctx.beginPath(); ctx.lineWidth=3; ctx.strokeStyle='#3498db';
+                const sharpen = 1.0 + (freq/5000);
+                
+                const calcGain = (th) => {
+                    let v=0, cos = Math.cos(th);
+                    if(type=='omni') v=1;
+                    else if(type=='cardioid') v=0.5+0.5*cos;
+                    else if(type=='supercardioid') v=0.37+0.63*cos;
+                    else if(type=='shotgun') v=0.1+0.9*cos;
+                    return Math.pow(Math.abs(v), sharpen);
+                };
+
+                for(let a=0; a<=360; a++) {
+                    const th = a*Math.PI/180;
+                    const r = calcGain(th) * R;
+                    const x = cx + r*Math.sin(th);
+                    const y = cy - r*Math.cos(th);
+                    if(a==0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+                }
+                ctx.closePath(); ctx.stroke();
+
+                // Noise Source
+                const thN = angle*Math.PI/180;
+                const nx = cx + (R+20)*Math.sin(thN);
+                const ny = cy - (R+20)*Math.cos(thN);
+                ctx.fillStyle='#ef4444'; ctx.beginPath(); ctx.arc(nx,ny,6,0,Math.PI*2); ctx.fill();
+                ctx.strokeStyle='#ef4444'; ctx.setLineDash([2,2]); ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(nx,ny); ctx.stroke(); ctx.setLineDash([]);
+
+                // Stats
+                const gNoise = calcGain(thN);
+                const dbNoise = 20*Math.log10(Math.max(0.001, gNoise));
+                document.getElementById('m-gain-noise').innerText = dbNoise.toFixed(1) + ' dB';
+                document.getElementById('m-snr').innerText = (0 - dbNoise).toFixed(1) + ' dB';
+            }
+        };
+
+        // --- MODULE C: LOUDNESS SIMULATION ---
+        const LoudnessSim = {
+            chart: null,
+            initCalled: false,
+            data0: [70, 45, 30, 20, 12, 5, -2, -5, 12, 15], // 0 Phon
+            lossPatterns: {
+                'normal': [0,0,0,0,0,0,0,0,0,0],
+                'presbycusis': [0, 0, 5, 10, 20, 30, 45, 60, 75, 85],
+                'noise': [0, 0, 0, 5, 10, 20, 40, 65, 30, 20]
+            },
+
+            update: function() {
+                if(!this.chart) this.createChart();
+                
+                const cond = document.getElementById('l-condition').value;
+                const aid = document.getElementById('l-aid');
+                const useAid = aid.checked;
+                
+                if(cond === 'normal') { aid.checked=false; aid.disabled=true; } 
+                else { aid.disabled=false; }
+
+                const loss = this.lossPatterns[cond];
+                // Calc damaged threshold
+                const damaged = this.data0.map((v,i) => v + loss[i]);
+                // Calc aided
+                const aided = damaged.map((v,i) => Math.max(this.data0[i], v - loss[i]*0.7));
+
+                this.chart.data.datasets[4].data = damaged;
+                this.chart.data.datasets[4].hidden = (cond === 'normal');
+                this.chart.data.datasets[5].data = aided;
+                this.chart.data.datasets[5].hidden = (!useAid || cond === 'normal');
+                this.chart.update();
+            },
+
+            createChart: function() {
+                const ctx = document.getElementById('loudnessChart').getContext('2d');
+                this.chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [20, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 12500],
+                        datasets: [
+                            { label: '80 Phon', data: [118, 102, 92, 88, 83, 80, 77, 75, 90, 95], borderColor: '#e5e7eb', borderDash:[5,5], pointRadius:0 },
+                            { label: '60 Phon', data: [105, 85, 76, 70, 64, 60, 57, 55, 70, 75], borderColor: '#e5e7eb', borderDash:[5,5], pointRadius:0 },
+                            { label: '40 Phon', data: [92, 70, 60, 52, 45, 40, 37, 35, 48, 50], borderColor: '#3498db', tension:0.4 },
+                            { label: '0 Phon (Normal)', data: this.data0, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.1)', fill:true, tension:0.4 },
+                            { label: 'Loss Threshold', data: [], borderColor: '#ef4444', borderDash:[5,5], borderWidth:3, hidden:true, tension:0.4 },
+                            { label: 'Aided', data: [], borderColor: '#10b981', borderWidth:3, hidden:true, tension:0.4 },
+                            { label: 'Point', data: [], pointBackgroundColor: 'black', type:'scatter', pointRadius:6 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        interaction: { mode: 'nearest', intersect: false },
+                        scales: {
+                            x: { type: 'logarithmic', min: 20, max: 16000, title:{display:true, text:'Frequency (Hz)'} },
+                            y: { min: -10, max: 130, title:{display:true, text:'SPL (dB)'} }
+                        },
+                        plugins: { legend: { labels: { filter: i => !i.text.includes('Phon') || i.text.includes('0') } } },
+                        onClick: (e, els, chart) => {
+                            const pts = Chart.helpers.getRelativePosition(e, chart);
+                            const freq = chart.scales.x.getValueForPixel(pts.x);
+                            const spl = chart.scales.y.getValueForPixel(pts.y);
+                            if(freq && spl) {
+                                chart.data.datasets[6].data = [{x:freq, y:spl}];
+                                chart.update();
+                                document.getElementById('l-val-freq').innerText = Math.round(freq);
+                                document.getElementById('l-val-spl').innerText = spl.toFixed(1);
+                                
+                                let phon = spl;
+                                if(freq<1000) phon = spl - (30*(1-Math.log10(freq)/3));
+                                if(freq>2000 && freq<6000) phon = spl + 5;
+                                document.getElementById('l-val-phon').innerText = '~' + phon.toFixed(0) + ' Phon';
+                            }
+                        }
+                    }
+                });
+                this.update();
+            }
+        };
+
+        // --- MODULE D: REVERB SIMULATION ---
+        const ReverbSim = {
+            ctx: null, canvas: null, w:0, h:0, animId: null,
+            particles: [],
+            
+            startLoop: function() {
+                if(this.animId) return;
+                const container = document.getElementById('reverb-container');
+                this.canvas = document.getElementById('reverbCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                
+                const resize = () => {
+                    this.canvas.width = container.clientWidth;
+                    this.canvas.height = container.clientHeight;
+                    this.w = this.canvas.width;
+                    this.h = this.canvas.height;
+                    this.updateCalc();
+                };
+                window.addEventListener('resize', () => { 
+                    if(!document.getElementById('view-reverb').classList.contains('hidden')) resize(); 
+                });
+                resize();
+
+                const loop = () => {
+                    // Fade effect
+                    this.ctx.fillStyle = 'rgba(0,0,0,0.25)';
+                    this.ctx.fillRect(0,0,this.w,this.h);
+
+                    // Room
+                    const L = parseFloat(document.getElementById('r-l').value) * 10; // scale
+                    const W = parseFloat(document.getElementById('r-w').value) * 10;
+                    const cx = this.w/2, cy = this.h/2;
+                    const rl = cx-W/2, rt = cy-L/2, rr = cx+W/2, rb = cy+L/2;
+
+                    this.ctx.strokeStyle = '#475569'; this.ctx.lineWidth=4;
+                    this.ctx.strokeRect(rl, rt, W, L);
+                    this.ctx.fillStyle = '#fff'; this.ctx.beginPath(); this.ctx.arc(cx,cy,4,0,Math.PI*2); this.ctx.fill();
+
+                    // Particles
+                    const alpha = parseFloat(document.getElementById('r-mat').value);
+                    this.particles.forEach(p => {
+                        p.x += p.vx; p.y += p.vy;
+                        let hit = false;
+                        if(p.x <= rl) { p.x=rl; p.vx*=-1; hit=true; }
+                        else if(p.x >= rr) { p.x=rr; p.vx*=-1; hit=true; }
+                        if(p.y <= rt) { p.y=rt; p.vy*=-1; hit=true; }
+                        else if(p.y >= rb) { p.y=rb; p.vy*=-1; hit=true; }
+                        
+                        if(hit) { p.e *= (1-alpha); if(p.e<0.05) p.dead=true; }
+                        
+                        if(!p.dead) {
+                            const c = p.e>0.8?'#fff':(p.e>0.5?'#facc15':'#ef4444');
+                            this.ctx.fillStyle = c;
+                            this.ctx.fillRect(p.x,p.y,3,3); // faster than arc
+                        }
+                    });
+                    this.particles = this.particles.filter(p => !p.dead);
+                    
+                    this.animId = requestAnimationFrame(loop);
+                };
+                loop();
+            },
+
+            stopLoop: function() {
+                if(this.animId) cancelAnimationFrame(this.animId);
+                this.animId = null;
+            },
+
+            fire: function() {
+                this.particles = [];
+                const cx = this.w/2, cy = this.h/2;
+                for(let i=0; i<300; i++) {
+                    const a = (Math.PI*2*i)/300;
+                    this.particles.push({x:cx, y:cy, vx:Math.cos(a)*5, vy:Math.sin(a)*5, e:1, dead:false});
+                }
+            },
+
+            updateCalc: function() {
+                const l = parseFloat(document.getElementById('r-l').value);
+                const w = parseFloat(document.getElementById('r-w').value);
+                const h = parseFloat(document.getElementById('r-h').value);
+                const mat = parseFloat(document.getElementById('r-mat').value);
+                const V = l*w*h;
+                const S = 2*(l*w + l*h + w*h);
+                const rt60 = (0.161*V)/(S*mat);
+                document.getElementById('r-val-rt60').innerText = rt60.toFixed(2) + ' s';
+                document.getElementById('r-val-v').innerText = V;
+                document.getElementById('r-val-s').innerText = S;
+            }
+        };
+
+        // Init App
+        // Lazy load Chart.js logic only when clicking the Loudness tab to ensure canvas is ready
+        document.addEventListener('DOMContentLoaded', () => {
+             // Default view
+        });
+
+    </script>
+</body>
+</html>

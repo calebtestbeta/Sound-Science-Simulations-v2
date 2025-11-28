@@ -448,6 +448,7 @@
                 // Initialize specific modules
                 if (viewId === 'delay') DelaySim.init();
                 if (viewId === 'mic') MicSim.init();
+                if (viewId === 'loudness') LoudnessSim.update();
                 if (viewId === 'reverb') ReverbSim.startLoop();
             }
         };

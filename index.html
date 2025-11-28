@@ -49,13 +49,6 @@
     </style>
     
     <!-- Chosen Palette: Warm Neutrals + Professional Blue Accents -->
-    <!-- Application Structure Plan: 
-         - Dashboard View: Grid layout for module selection.
-         - Module Views: Full-screen functional areas with "Back" navigation.
-         - SPA Logic: Vanilla JS to toggle visibility of sections (no router).
-         - State Management: Global objects for each module to handle init/destroy loops.
-    -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. All visualziations are Canvas/Chart.js -->
 </head>
 <body class="bg-warm text-slate-800 font-sans min-h-screen flex flex-col">
 
@@ -226,10 +219,17 @@
                 </div>
             </details>
 
-            <div class="grid lg:grid-cols-2 gap-8">
-                <!-- Controls -->
-                <div class="space-y-4">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-5">
+            <!-- 
+               優化版佈局：
+               - 手機版 (grid-cols-1): 顯示順序 Controls (order-1) -> Canvas (order-2) -> Stats (order-3)
+               - 桌機版 (grid-cols-2): 透過 'contents' 讓 Controls 和 Stats 成為 Grid 的直接子元素，並控制它們在 Col 1，Canvas 在 Col 2
+            -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Left Wrapper (Controls + Stats) - 手機上這個 wrapper 消失(contents)，子元素直接參與排序 -->
+                <div class="contents lg:block lg:space-y-4">
+                    
+                    <!-- Controls (Order 1) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-5 order-1">
                         <div>
                             <label class="block text-sm font-bold text-slate-700 mb-2">麥克風類型</label>
                             <select id="m-type" onchange="MicSim.update()" class="w-full p-2 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-accent outline-none">
@@ -258,7 +258,8 @@
                         </div>
                     </div>
 
-                    <div class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                    <!-- Stats (Order 3: 手機版排在 Canvas 之後) -->
+                    <div class="bg-blue-50 p-6 rounded-2xl border border-blue-100 order-3">
                         <h3 class="text-sm font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2">數據分析</h3>
                         <div class="space-y-2 text-sm">
                             <div class="flex justify-between"><span class="text-blue-700">語音 Gain (0°)</span><span id="m-gain-voice" class="font-mono font-bold">0.0 dB</span></div>
@@ -271,8 +272,8 @@
                     </div>
                 </div>
 
-                <!-- Canvas -->
-                <div class="flex justify-center items-center bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+                <!-- Canvas (Order 2: 手機版插在 Controls 和 Stats 中間) -->
+                <div class="flex justify-center items-center bg-white rounded-2xl shadow-sm border border-slate-100 p-4 order-2 lg:order-none lg:h-auto">
                     <canvas id="polarCanvas" width="400" height="400" class="max-w-full h-auto"></canvas>
                 </div>
             </div>
@@ -459,6 +460,8 @@
             ROOM_W: 150, ROOM_D: 60,
             S1: {x:10, y:30}, S2: {x:100, y:30}, L: {x:120, y:30},
             autoComp: false,
+            isVertical: false,
+            offsetX: 0, offsetY: 0,
 
             init: function() {
                 this.canvas = document.getElementById('delayCanvas');
@@ -471,8 +474,39 @@
                     const rect = this.canvas.getBoundingClientRect();
                     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                    const x = (clientX - rect.left) / this.scale;
-                    const y = (clientY - rect.top) / this.scale;
+                    
+                    let x, y;
+                    
+                    // Inverse transform mouse coordinates to room coordinates
+                    if (this.isVertical) {
+                        // In vertical mode:
+                        // visual X comes from room Y (width axis)
+                        // visual Y comes from room X (length axis)
+                        // y_visual = offset + x_room * scale  => x_room = (y_visual - offset) / scale
+                        // x_visual = offset + y_room * scale  => y_room = (x_visual - offset) / scale
+                        // (Offsets might differ for X/Y, see resize logic)
+                        
+                        // Recalculate offsets as in resize()
+                        const offX = (this.width - (this.ROOM_D * this.scale)) / 2;
+                        const offY = 0;
+                        
+                        const visualX = clientX - rect.left;
+                        const visualY = clientY - rect.top;
+                        
+                        y = (visualX - offX) / this.scale;
+                        x = (visualY - offY) / this.scale;
+                    } else {
+                        // Standard horizontal
+                        const offX = 0;
+                        const offY = (this.height - (this.ROOM_D * this.scale)) / 2;
+                        
+                        const visualX = clientX - rect.left;
+                        const visualY = clientY - rect.top;
+                        
+                        x = (visualX - offX) / this.scale;
+                        y = (visualY - offY) / this.scale;
+                    }
+
                     this.L.x = Math.max(0, Math.min(this.ROOM_W, x));
                     this.L.y = Math.max(0, Math.min(this.ROOM_D, y));
                     this.draw();
@@ -492,7 +526,27 @@
                 this.canvas.height = p.clientHeight;
                 this.width = this.canvas.width;
                 this.height = this.canvas.height;
-                this.scale = this.width / this.ROOM_W;
+                
+                // Check layout mode
+                // If width < 600px (mobile), use vertical layout
+                this.isVertical = (this.width < 600);
+
+                if (this.isVertical) {
+                    // Vertical: Fit 150m Room-Length into Canvas Height
+                    // Room Width (60m) becomes visual width
+                    this.scale = this.height / this.ROOM_W;
+                    // Center the room strip horizontally
+                    this.offsetX = (this.width - (this.ROOM_D * this.scale)) / 2;
+                    this.offsetY = 0;
+                } else {
+                    // Horizontal: Fit 150m Room-Length into Canvas Width
+                    // Room Width (60m) becomes visual height
+                    this.scale = this.width / this.ROOM_W;
+                    this.offsetX = 0;
+                    // Center vertically
+                    this.offsetY = (this.height - (this.ROOM_D * this.scale)) / 2;
+                }
+                
                 this.draw();
             },
 
@@ -536,33 +590,76 @@
                 c.fillStyle = '#0f172a'; // Slate 900
                 c.fillRect(0,0,this.width, this.height);
                 
+                // Helper to transform coordinates
+                const tr = (x, y) => {
+                    if (this.isVertical) {
+                        // Room X (Length) -> Visual Y
+                        // Room Y (Width) -> Visual X
+                        return {
+                            x: this.offsetX + y * this.scale,
+                            y: this.offsetY + x * this.scale
+                        };
+                    } else {
+                        // Room X -> Visual X
+                        // Room Y -> Visual Y
+                        return {
+                            x: this.offsetX + x * this.scale,
+                            y: this.offsetY + y * this.scale
+                        };
+                    }
+                };
+
                 // Grid
                 c.strokeStyle = '#1e293b';
                 c.beginPath();
                 for(let x=0; x<=this.ROOM_W; x+=10) {
-                    c.moveTo(x*this.scale, 0); c.lineTo(x*this.scale, this.height);
+                    // Draw lines across the room width (Y axis) at each X step
+                    const p1 = tr(x, 0);
+                    const p2 = tr(x, this.ROOM_D);
+                    c.moveTo(p1.x, p1.y);
+                    c.lineTo(p2.x, p2.y);
                 }
                 c.stroke();
 
                 const drawSpk = (p, color, label) => {
-                    const x = p.x*this.scale, y = p.y*this.scale;
+                    const pos = tr(p.x, p.y);
                     c.fillStyle = color;
-                    c.beginPath(); c.moveTo(x,y-10); c.lineTo(x+15,y-5); c.lineTo(x+15,y+5); c.lineTo(x,y+10); c.fill();
-                    c.fillStyle = '#fff'; c.font = '12px sans-serif'; c.fillText(label, x, y-15);
+                    c.beginPath(); 
+                    
+                    if (this.isVertical) {
+                        // Triangle pointing down
+                        c.moveTo(pos.x-10, pos.y); 
+                        c.lineTo(pos.x-5, pos.y+15); 
+                        c.lineTo(pos.x+5, pos.y+15); 
+                        c.lineTo(pos.x+10, pos.y);
+                        c.fillText(label, pos.x+15, pos.y+10);
+                    } else {
+                        // Triangle pointing right
+                        c.moveTo(pos.x, pos.y-10); 
+                        c.lineTo(pos.x+15, pos.y-5); 
+                        c.lineTo(pos.x+15, pos.y+5); 
+                        c.lineTo(pos.x, pos.y+10);
+                        c.fillText(label, pos.x, pos.y-15);
+                    }
+                    c.fill();
+                    c.fillStyle = '#fff'; c.font = '12px sans-serif'; 
                 };
 
                 drawSpk(this.S1, '#3498db', 'S1');
                 drawSpk(this.S2, '#e67e22', 'S2');
 
                 // Listener
-                const lx = this.L.x*this.scale, ly = this.L.y*this.scale;
-                c.fillStyle = '#2ecc71'; c.beginPath(); c.arc(lx, ly, 8, 0, Math.PI*2); c.fill();
-                c.fillStyle='#fff'; c.fillText('L', lx+12, ly+4);
+                const lPos = tr(this.L.x, this.L.y);
+                c.fillStyle = '#2ecc71'; c.beginPath(); c.arc(lPos.x, lPos.y, 8, 0, Math.PI*2); c.fill();
+                c.fillStyle='#fff'; c.fillText('L', lPos.x+12, lPos.y+4);
                 
                 // Lines
                 c.setLineDash([5,5]); c.strokeStyle='rgba(255,255,255,0.2)';
-                c.beginPath(); c.moveTo(this.S1.x*this.scale, this.S1.y*this.scale); c.lineTo(lx,ly); c.stroke();
-                c.beginPath(); c.moveTo(this.S2.x*this.scale, this.S2.y*this.scale); c.lineTo(lx,ly); c.stroke();
+                const s1Pos = tr(this.S1.x, this.S1.y);
+                const s2Pos = tr(this.S2.x, this.S2.y);
+                
+                c.beginPath(); c.moveTo(s1Pos.x, s1Pos.y); c.lineTo(lPos.x, lPos.y); c.stroke();
+                c.beginPath(); c.moveTo(s2Pos.x, s2Pos.y); c.lineTo(lPos.x, lPos.y); c.stroke();
                 c.setLineDash([]);
             }
         };
@@ -783,9 +880,19 @@
             fire: function() {
                 this.particles = [];
                 const cx = this.w/2, cy = this.h/2;
-                for(let i=0; i<300; i++) {
-                    const a = (Math.PI*2*i)/300;
-                    this.particles.push({x:cx, y:cy, vx:Math.cos(a)*5, vy:Math.sin(a)*5, e:1, dead:false});
+                // 1. 減少線條數量：將粒子數從 300 降至 100
+                const count = 100; 
+                // 2. 降低速度：將基礎速度從 5 降至 5/8 (約 0.625)
+                const speed = 5 / 8;
+
+                for(let i=0; i<count; i++) {
+                    const a = (Math.PI*2*i)/count;
+                    this.particles.push({
+                        x:cx, y:cy, 
+                        vx:Math.cos(a)*speed, 
+                        vy:Math.sin(a)*speed, 
+                        e:1, dead:false
+                    });
                 }
             },
 

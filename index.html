@@ -191,6 +191,9 @@
                                 自動補償 (Aligned)
                             </button>
                         </div>
+                        <button id="btn-delay-anim" onclick="DelaySim.startAnimation()" class="w-full mt-3 py-2 px-3 rounded-lg text-sm font-bold transition-colors bg-green-500 text-white shadow-md hover:bg-green-600 flex items-center justify-center gap-2">
+                            <span>▶</span> 播放聲波傳遞演示 (慢動作)
+                        </button>
                     </div>
 
                     <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100 space-y-3 text-sm">
@@ -220,13 +223,15 @@
         <div id="view-mic" class="hidden animate-fade-in space-y-6">
             <details class="bg-blue-50 border border-blue-200 rounded-xl p-4 cursor-pointer">
                 <summary class="font-bold text-blue-800 flex items-center gap-2">
-                    <span>💡</span> 1分鐘原理：極座標圖怎麼看？
+                    <span>💡</span> 1分鐘原理：這張圖代表什麼？
                 </summary>
                 <div class="mt-3 text-sm text-blue-900 leading-relaxed border-t border-blue-200 pt-3">
+                    <p class="mb-2">這張極座標圖顯示了麥克風的「耳朵形狀」：</p>
                     <ul class="list-disc pl-5 space-y-1">
-                        <li><strong>圓半徑 = 收音靈敏度</strong>。離圓心越遠，麥克風聽得越清楚。</li>
-                        <li><strong>心型 (Cardioid)</strong>：專注前方，忽略後方。適合舞台。</li>
-                        <li><strong>頻率銳化</strong>：試著調高頻率 (Hz)，你會發現圖形變「尖」了。這是物理特性，高頻聲音像手電筒光束，低頻則像燈泡四散。</li>
+                        <li><strong>中心圖示</strong>：代表麥克風本體，朝向上方（0度）。</li>
+                        <li><strong>綠色點</strong>：主唱或目標音源（永遠在正前方）。</li>
+                        <li><strong>紅色點</strong>：可移動的噪音源。</li>
+                        <li><strong>紅線粗細</strong>：代表噪音被麥克風收錄的音量。<strong>線越細，代表降噪效果越好</strong>。</li>
                     </ul>
                 </div>
             </details>
@@ -478,6 +483,9 @@
             autoComp: false,
             isVertical: false,
             offsetX: 0, offsetY: 0,
+            
+            // Animation State
+            anim: { active: false, time: 0, reqId: null },
 
             init: function() {
                 this.canvas = document.getElementById('delayCanvas');
@@ -578,19 +586,49 @@
                 if(delta > 0.1 && delta < 15 && Math.abs(spl1-spl2)<6) warn.classList.remove('hidden');
                 else warn.classList.add('hidden');
             },
+            
+            startAnimation: function() {
+                if(this.anim.active) {
+                    cancelAnimationFrame(this.anim.reqId);
+                }
+                
+                gtag('event', 'delay_animation_play');
+                
+                this.anim.active = true;
+                this.anim.time = 0; 
+                this.loop();
+            },
+
+            loop: function() {
+                if(!this.anim.active) return;
+                
+                // Slow motion: 0.8 meters per frame (approx 50m/s visual speed)
+                this.anim.time += 0.8; 
+                
+                if(this.anim.time > 200) {
+                    this.anim.active = false;
+                    this.draw(); 
+                    return;
+                }
+
+                this.draw();
+                this.anim.reqId = requestAnimationFrame(() => this.loop());
+            },
+            
+            getCanvasPos: function(roomX, roomY) {
+                 if (this.isVertical) {
+                        return { x: this.offsetX + roomY * this.scale, y: this.offsetY + roomX * this.scale };
+                    } else {
+                        return { x: this.offsetX + roomX * this.scale, y: this.offsetY + roomY * this.scale };
+                    }
+            },
 
             draw: function() {
                 const c = this.ctx;
                 c.fillStyle = '#0f172a'; // Slate 900
                 c.fillRect(0,0,this.width, this.height);
                 
-                const tr = (x, y) => {
-                    if (this.isVertical) {
-                        return { x: this.offsetX + y * this.scale, y: this.offsetY + x * this.scale };
-                    } else {
-                        return { x: this.offsetX + x * this.scale, y: this.offsetY + y * this.scale };
-                    }
-                };
+                const tr = (x, y) => this.getCanvasPos(x, y);
 
                 // Grid
                 c.strokeStyle = '#1e293b';
@@ -603,6 +641,7 @@
                 }
                 c.stroke();
 
+                // Draw Speakers
                 const drawSpk = (p, color, label) => {
                     const pos = tr(p.x, p.y);
                     c.fillStyle = color;
@@ -622,18 +661,68 @@
                 drawSpk(this.S1, '#3498db', 'S1');
                 drawSpk(this.S2, '#e67e22', 'S2');
 
-                // Listener
+                // Draw Listener
                 const lPos = tr(this.L.x, this.L.y);
                 c.fillStyle = '#2ecc71'; c.beginPath(); c.arc(lPos.x, lPos.y, 8, 0, Math.PI*2); c.fill();
                 c.fillStyle='#fff'; c.fillText('L', lPos.x+12, lPos.y+4);
                 
-                // Lines
+                // Draw Connecting Lines
                 c.setLineDash([5,5]); c.strokeStyle='rgba(255,255,255,0.2)';
                 const s1Pos = tr(this.S1.x, this.S1.y);
                 const s2Pos = tr(this.S2.x, this.S2.y);
                 c.beginPath(); c.moveTo(s1Pos.x, s1Pos.y); c.lineTo(lPos.x, lPos.y); c.stroke();
                 c.beginPath(); c.moveTo(s2Pos.x, s2Pos.y); c.lineTo(lPos.x, lPos.y); c.stroke();
                 c.setLineDash([]);
+                
+                // Animation: Draw Waves
+                if (this.anim.active || this.anim.time > 0) {
+                     const t = this.anim.time;
+                     
+                     let delayDist = 0;
+                     if(this.autoComp) {
+                         // Delay distance = distance between S1 and S2
+                         delayDist = Math.sqrt(Math.pow(this.S1.x - this.S2.x, 2) + Math.pow(this.S1.y - this.S2.y, 2));
+                     }
+
+                     const r1 = t;
+                     const r2 = t - delayDist; 
+
+                     // Draw Wave 1 (S1)
+                     this.drawWave(this.S1, r1, '#3498db');
+
+                     // Draw Wave 2 (S2) - Only if positive radius
+                     if (r2 > 0) {
+                         this.drawWave(this.S2, r2, '#e67e22');
+                     }
+                }
+            },
+            
+            drawWave: function(sourcePos, radiusMeters, color) {
+                const ctx = this.ctx;
+                const center = this.getCanvasPos(sourcePos.x, sourcePos.y);
+                const rPix = radiusMeters * this.scale;
+                
+                // 決定主方向：垂直模式朝下 (90度/PI/2)，水平模式朝右 (0度)
+                const baseAngle = this.isVertical ? Math.PI / 2 : 0;
+                // 擴散角度：左右各 45 度，總共 90 度扇形
+                const spread = Math.PI / 4; 
+
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                // 繪製扇形弧線
+                ctx.arc(center.x, center.y, rPix, baseAngle - spread, baseAngle + spread);
+                ctx.stroke();
+                
+                // 繪製扇形填充
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.1;
+                ctx.beginPath();
+                ctx.moveTo(center.x, center.y); // 從圓心開始
+                ctx.arc(center.x, center.y, rPix, baseAngle - spread, baseAngle + spread);
+                ctx.closePath(); // 連回圓心
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
             }
         };
 
@@ -659,11 +748,13 @@
 
                 ctx.clearRect(0,0,w,h);
                 
+                // Grid and Background
                 ctx.strokeStyle = '#eee'; ctx.lineWidth=1;
                 for(let r=0.25; r<=1; r+=0.25) { ctx.beginPath(); ctx.arc(cx, cy, R*r, 0, Math.PI*2); ctx.stroke(); }
                 ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,h); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(w,cy); ctx.stroke();
                 
+                // Polar Pattern
                 ctx.beginPath(); ctx.lineWidth=3; ctx.strokeStyle='#3498db';
                 const sharpen = 1.0 + (freq/5000);
                 
@@ -685,13 +776,46 @@
                 }
                 ctx.closePath(); ctx.stroke();
 
+                // 1. Draw Microphone (Center) - Pointing UP (0 degrees)
+                ctx.fillStyle = '#64748b'; // Slate 500
+                ctx.fillRect(cx - 6, cy - 10, 12, 20); // Body
+                ctx.beginPath(); ctx.arc(cx, cy - 10, 8, Math.PI, 0); ctx.fill(); // Grille (Top)
+                ctx.fillStyle = '#cbd5e1'; // Slate 300
+                ctx.fillRect(cx - 2, cy + 10, 4, 15); // Stand/Connector
+
+                // 2. Draw Target Source (0 degrees) - Fixed at top
+                const ty = cy - (R + 30);
+                ctx.fillStyle = '#2ecc71'; // Green
+                ctx.beginPath(); ctx.arc(cx, ty, 8, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#166534'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign='center'; ctx.fillText('主音源', cx, ty - 12);
+
+                // Connection Line (Target)
+                ctx.beginPath(); ctx.strokeStyle = '#2ecc71'; ctx.lineWidth = 4;
+                ctx.moveTo(cx, ty + 10); ctx.lineTo(cx, cy - 25); ctx.stroke();
+
+                // 3. Draw Noise Source (Variable Angle)
                 const thN = angle*Math.PI/180;
                 const nx = cx + (R+20)*Math.sin(thN);
                 const ny = cy - (R+20)*Math.cos(thN);
-                ctx.fillStyle='#ef4444'; ctx.beginPath(); ctx.arc(nx,ny,6,0,Math.PI*2); ctx.fill();
-                ctx.strokeStyle='#ef4444'; ctx.setLineDash([2,2]); ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(nx,ny); ctx.stroke(); ctx.setLineDash([]);
-
+                
+                // Calculate Gain for visual feedback
                 const gNoise = calcGain(thN);
+                
+                // Visual feedback: Line opacity/width based on gain
+                ctx.beginPath();
+                // Red color, opacity 0.2 min + gain
+                ctx.strokeStyle = `rgba(239, 68, 68, ${0.2 + gNoise * 0.8})`; 
+                ctx.lineWidth = 1 + gNoise * 5; // Width varies 1px to 6px
+                ctx.setLineDash([4, 4]); // Dashed to distinguish from main source
+                ctx.moveTo(nx, ny); ctx.lineTo(cx, cy); ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Noise Icon
+                ctx.fillStyle = '#ef4444'; // Red
+                ctx.beginPath(); ctx.arc(nx, ny, 8, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('N', nx, ny+3); // Label inside
+
+                // Update Stats text
                 const dbNoise = 20*Math.log10(Math.max(0.001, gNoise));
                 document.getElementById('m-gain-noise').innerText = dbNoise.toFixed(1) + ' dB';
                 document.getElementById('m-snr').innerText = (0 - dbNoise).toFixed(1) + ' dB';
